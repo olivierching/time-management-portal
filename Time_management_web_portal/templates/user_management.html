@@ -1,0 +1,549 @@
+{% extends "base.html" %}
+{% block title %}User Management - Time Management Portal{% endblock %}
+{% block content %}
+<div class="content-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Debug info -->
+    {% if request.args %}
+    <div class="debug-info" style="margin-bottom: 1rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px;">
+        <small>Active filters: 
+            {% if request.args.get('username') %}Username: {{ request.args.get('username') }}{% endif %}
+            {% if request.args.get('account_type') %}Account Type: {{ request.args.get('account_type') }}{% endif %}
+        </small>
+    </div>
+    {% endif %}
+    
+    <h2>User Management</h2>
+    <div class="info-message">
+        Manage user accounts, roles, and permissions.
+    </div>
+    
+    <div class="filters-row">
+        <form id="filterForm" method="GET" action="{{ url_for('users') }}" class="filters-form">
+            <div class="filter-item">
+                <label for="filter_username">Username:</label>
+                <input type="text" id="filter_username" name="username" value="{{ request.args.get('username', '') }}" placeholder="Search username...">
+            </div>
+            <div class="filter-item">
+                <label for="filter_account_type">Account Type:</label>
+                <select id="filter_account_type" name="account_type">
+                    <option value="">All Types</option>
+                    {% for account_type in account_types %}
+                    <option value="{{ account_type[0] }}" {% if request.args.get('account_type') == account_type[0]|string %}selected{% endif %}>{{ account_type[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-buttons">
+                <button type="submit" class="apply-filter-btn">Search</button>
+                <button type="button" class="clear-filter-btn" onclick="clearFilters()">Clear</button>
+                <button type="button" class="add-new-btn" onclick="addNewUser()">Add New User</button>
+            </div>
+        </form>
+    </div>
+    
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Login Name</th>
+                    <th>Full Name</th>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>Email</th>
+                    <th>Account Type</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user[0] }}</td>
+                    <td>{{ user[1] }}</td>
+                    <td>{{ user[2] }}</td>
+                    <td>{{ user[3] }}</td>
+                    <td>{{ user[4] }}</td>
+                    <td>{{ user[5] }}</td>
+                    <td>{{ user[6] }}</td>
+                    <td>
+                        <div class="action-buttons">
+                            <button onclick="editUser('{{ user[0] }}')" class="edit-btn">Edit</button>
+                            <button onclick="deleteUser('{{ user[0] }}', '{{ user[1] }}')" class="delete-btn">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Edit/Add User Modal -->
+<div id="userModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modalTitle">Edit User</h3>
+            <span class="close">&times;</span>
+        </div>
+        <form id="userForm" method="POST">
+            <input type="hidden" id="userId" name="userId">
+            <input type="hidden" id="formAction" name="action" value="update">
+            
+            <div class="form-group">
+                <label for="login_name">Login Name:</label>
+                <input type="text" id="login_name" name="login_name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="first_name">First Name:</label>
+                <input type="text" id="first_name" name="first_name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="last_name">Last Name:</label>
+                <input type="text" id="last_name" name="last_name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="account_type_id">Account Type:</label>
+                <select id="account_type_id" name="account_type_id" required>
+                    {% for account_type in account_types %}
+                    <option value="{{ account_type[0] }}">{{ account_type[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group" id="passwordGroup">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password">
+                <small class="form-note" id="passwordNote">Leave blank to keep existing password</small>
+            </div>
+            
+            <div class="form-buttons">
+                <button type="submit" class="submit-btn" id="submitBtn">Update User</button>
+                <button type="button" class="cancel-btn" onclick="closeModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteModal" class="modal">
+    <div class="modal-content delete-modal-content">
+        <div class="modal-header">
+            <h3>Confirm Delete</h3>
+            <span class="close" onclick="closeDeleteModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+            <p>Are you sure you want to delete user <strong id="deleteUserName"></strong>?</p>
+            <p class="warning-text">This action cannot be undone.</p>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="delete-confirm-btn" id="confirmDeleteBtn">Delete</button>
+            <button type="button" class="cancel-btn" onclick="closeDeleteModal()">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Modal Styles for draggable functionality */
+.modal-header {
+    cursor: move;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 20px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+.modal-header h3 {
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.modal {
+    position: fixed;
+}
+
+.modal-content {
+    position: relative;
+    margin: 0;
+    transform: translate(-50%, -50%);
+    left: 50%;
+    top: 50%;
+    width: 500px;
+    max-width: 90vw;
+}
+
+.close {
+    cursor: pointer;
+    font-size: 24px;
+    padding: 0 5px;
+}
+
+.close:hover {
+    color: #666;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.action-buttons button {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.edit-btn {
+    background-color: #007bff;
+    color: white;
+}
+
+.edit-btn:hover {
+    background-color: #0056b3;
+}
+
+.delete-btn {
+    background-color: #dc3545;
+    color: white;
+}
+
+.delete-btn:hover {
+    background-color: #c82333;
+}
+
+.add-new-btn {
+    background-color: #28a745;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.add-new-btn:hover {
+    background-color: #218838;
+}
+
+.form-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+.submit-btn {
+    background-color: #007bff;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.submit-btn:hover {
+    background-color: #0056b3;
+}
+
+.cancel-btn {
+    background-color: #6c757d;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.cancel-btn:hover {
+    background-color: #545b62;
+}
+
+.form-note {
+    color: #6c757d;
+    font-size: 12px;
+    display: block;
+    margin-top: 5px;
+}
+
+.delete-modal-content {
+    width: 400px;
+}
+
+.modal-body {
+    padding: 20px;
+}
+
+.modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #dee2e6;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.delete-confirm-btn {
+    background-color: #dc3545;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.delete-confirm-btn:hover {
+    background-color: #c82333;
+}
+
+.warning-text {
+    color: #dc3545;
+    font-size: 14px;
+    margin-top: 10px;
+}
+</style>
+
+<script>
+// Make modal draggable
+function makeDraggable(modal) {
+    const modalContent = modal.querySelector('.modal-content');
+    const modalHeader = modal.querySelector('.modal-header');
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX;
+    let initialY;
+    let xOffset = 0;
+    let yOffset = 0;
+
+    modalHeader.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+
+    function dragStart(e) {
+        if (e.target.closest('.close')) return;
+        
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+
+        if (e.target === modalHeader || e.target.closest('.modal-header')) {
+            isDragging = true;
+        }
+    }
+
+    function drag(e) {
+        if (isDragging) {
+            e.preventDefault();
+            
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+
+            xOffset = currentX;
+            yOffset = currentY;
+
+            setTranslate(currentX, currentY, modalContent);
+        }
+    }
+
+    function setTranslate(xPos, yPos, el) {
+        const translate = `translate(calc(-50% + ${xPos}px), calc(-50% + ${yPos}px))`;
+        el.style.transform = translate;
+    }
+
+    function dragEnd() {
+        initialX = currentX;
+        initialY = currentY;
+        isDragging = false;
+    }
+}
+
+// Initialize draggable functionality for modals
+document.addEventListener('DOMContentLoaded', function() {
+    const userModal = document.getElementById('userModal');
+    const deleteModal = document.getElementById('deleteModal');
+    makeDraggable(userModal);
+    makeDraggable(deleteModal);
+});
+
+// Add new user
+function addNewUser() {
+    const modal = document.getElementById('userModal');
+    const form = document.getElementById('userForm');
+    const modalTitle = document.getElementById('modalTitle');
+    const submitBtn = document.getElementById('submitBtn');
+    const passwordNote = document.getElementById('passwordNote');
+    const passwordField = document.getElementById('password');
+    
+    // Reset form
+    form.reset();
+    
+    // Set form for adding new user
+    document.getElementById('userId').value = '';
+    document.getElementById('formAction').value = 'create';
+    modalTitle.textContent = 'Add New User';
+    submitBtn.textContent = 'Create User';
+    passwordNote.textContent = 'Password is required for new users';
+    passwordField.required = true;
+    
+    // Set form action
+    form.action = "{{ url_for('create_user_route') }}";
+    
+    modal.style.display = "block";
+}
+
+// Edit user
+function editUser(userId) {
+    const modal = document.getElementById('userModal');
+    const form = document.getElementById('userForm');
+    const modalTitle = document.getElementById('modalTitle');
+    const submitBtn = document.getElementById('submitBtn');
+    const passwordNote = document.getElementById('passwordNote');
+    const passwordField = document.getElementById('password');
+    
+    document.getElementById('userId').value = userId;
+    document.getElementById('formAction').value = 'update';
+    modalTitle.textContent = 'Edit User';
+    submitBtn.textContent = 'Update User';
+    passwordNote.textContent = 'Leave blank to keep existing password';
+    passwordField.required = false;
+    
+    // Set form action
+    form.action = "{{ url_for('update_user_route') }}";
+    
+    // Fetch current user details
+    fetch(`/get_user/${userId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            
+            // Fill form with user data
+            document.getElementById('login_name').value = data.Login_Name || '';
+            document.getElementById('first_name').value = data.First_Name || '';
+            document.getElementById('last_name').value = data.Last_Name || '';
+            document.getElementById('email').value = data.Email || '';
+            document.getElementById('account_type_id').value = data.Account_Type_ID || '';
+            document.getElementById('password').value = ''; // Always empty for security
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error fetching user details');
+        });
+    
+    modal.style.display = "block";
+}
+
+// Delete user
+function deleteUser(userId, username) {
+    const modal = document.getElementById('deleteModal');
+    const userNameSpan = document.getElementById('deleteUserName');
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    
+    userNameSpan.textContent = username;
+    
+    // Set up confirm button click handler
+    confirmBtn.onclick = function() {
+        // Create form and submit delete request
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = "{{ url_for('delete_user_route') }}";
+        
+        const userIdInput = document.createElement('input');
+        userIdInput.type = 'hidden';
+        userIdInput.name = 'userId';
+        userIdInput.value = userId;
+        
+        form.appendChild(userIdInput);
+        document.body.appendChild(form);
+        form.submit();
+    };
+    
+    modal.style.display = "block";
+}
+
+// Close modals
+function closeModal() {
+    document.getElementById('userModal').style.display = "none";
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').style.display = "none";
+}
+
+// Close modal when clicking the X
+document.querySelectorAll('.close').forEach(closeBtn => {
+    closeBtn.onclick = function() {
+        this.closest('.modal').style.display = "none";
+    }
+});
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const userModal = document.getElementById('userModal');
+    const deleteModal = document.getElementById('deleteModal');
+    
+    if (event.target == userModal) {
+        userModal.style.display = "none";
+    }
+    if (event.target == deleteModal) {
+        deleteModal.style.display = "none";
+    }
+}
+
+// Clear filters
+function clearFilters() {
+    document.getElementById('filter_username').value = '';
+    document.getElementById('filter_account_type').value = '';
+    
+    const form = document.getElementById('filterForm');
+    form.submit();
+}
+
+// Form validation
+document.getElementById('userForm').addEventListener('submit', function(e) {
+    const password = document.getElementById('password').value;
+    const action = document.getElementById('formAction').value;
+    
+    // For new users, password is required
+    if (action === 'create' && !password) {
+        e.preventDefault();
+        alert('Password is required for new users');
+        return false;
+    }
+    
+    // Validate email format
+    const email = document.getElementById('email').value;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        e.preventDefault();
+        alert('Please enter a valid email address');
+        return false;
+    }
+});
+</script>
+{% endblock %}

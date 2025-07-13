@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% block title %}Incidents - Time Management Portal{% endblock %}
+{% block content %}
+<div class="content-container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Debug info -->
+    {% if request.args %}
+    <div class="debug-info" style="margin-bottom: 1rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px;">
+        <small>Active filters: 
+            {% if request.args.get('ticket_id') %}Ticket ID: {{ request.args.get('ticket_id') }}{% endif %}
+            {% if request.args.get('status') %}Status: {{ request.args.get('status') }}{% endif %}
+            {% if request.args.get('date_from') %}From: {{ request.args.get('date_from') }}{% endif %}
+            {% if request.args.get('date_to') %}To: {{ request.args.get('date_to') }}{% endif %}
+        </small>
+    </div>
+    {% endif %}
+    
+    <h2>Incident Tickets</h2>
+    {% if not request.args.get('status') %}
+    <div class="info-message">
+        Showing active incidents only (excluding Resolved and Closed). Use filters to see all incidents.
+    </div>
+    {% endif %}
+    <div class="filters-row">
+        <form id="filterForm" method="GET" action="{{ url_for('incidents') }}" class="filters-form">
+            <div class="filter-item">
+                <label for="filter_ticket_id">Incident Ticket ID:</label>
+                <input type="text" id="filter_ticket_id" name="ticket_id" value="{{ request.args.get('ticket_id', '') }}" placeholder="Search ticket ID...">
+            </div>
+            <div class="filter-item">
+                <label for="filter_status">Status:</label>
+                <select id="filter_status" name="status">
+                    <option value="All" {% if request.args.get('status') == 'All' %}selected{% endif %}>All</option>
+                    <option value="Open" {% if request.args.get('status') == 'Open' %}selected{% endif %}>Open</option>
+                    <option value="In Progress" {% if request.args.get('status') == 'In Progress' %}selected{% endif %}>In Progress</option>
+                    <option value="Resolved" {% if request.args.get('status') == 'Resolved' %}selected{% endif %}>Resolved</option>
+                    <option value="Closed" {% if request.args.get('status') == 'Closed' %}selected{% endif %}>Closed</option>
+                </select>
+            </div>
+            <div class="filter-item">
+                <label for="filter_date_from">From Date:</label>
+                <input type="date" id="filter_date_from" name="date_from" value="{{ request.args.get('date_from', '') }}">
+            </div>
+            <div class="filter-item">
+                <label for="filter_date_to">To Date:</label>
+                <input type="date" id="filter_date_to" name="date_to" value="{{ request.args.get('date_to', '') }}">
+            </div>
+            <div class="filter-buttons">
+                <button type="submit" class="apply-filter-btn">Apply Filters</button>
+                <button type="button" class="clear-filter-btn" onclick="clearFilters()">Clear</button>
+            </div>
+        </form>
+    </div>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Incident Ticket ID</th>
+                    <th>Impact Service</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Open By</th>
+                    <th>Open Date</th>
+                    <th>Close Date</th>
+                    <th>Time Spent</th>
+                    <th>Assign Group </th>
+                    <th>Assign to</th>
+                    <th>Root Cause</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for incident in incidents %}
+                <tr>
+                    <td>{{ incident[0] }}</td>
+                    <td>{{ incident[1] }}</td>
+                    <td>{{ incident[2] }}</td>
+                    <td>{{ incident[3] }}</td>
+                    <td>{{ incident[4] }}</td>
+                    <td>{{ incident[5] }}</td>
+                    <td>{{ incident[6] }}</td>
+                    <td>{{ incident[7] }}</td>
+                    <td>{{ incident[8] }}</td>
+                    <td>{{ incident[9] }}</td>
+                    <td>{{ incident[10] }}</td>
+                    <td>{{ incident[11] }}</td>
+                    <td>
+                        <div class="update-button">
+                             <button onclick="editIncident('{{ incident[0] }}')" class="edit-btn">Edit</button>
+                             <button onclick="createTask('{{ incident[1] }}')" class="create-task-btn">Create Task</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Edit Incident</h3>
+            <span class="close">&times;</span>
+        </div>
+        <form id="editForm" method="POST" action="{{ url_for('update_incident_route') }}">
+            <input type="hidden" id="ticketId" name="ticketId">
+            <div class="form-group">
+                <label for="incident_ticket_id">Incident Ticket ID:</label>
+                <input type="text" id="incident_ticket_id" name="incident_ticket_id" required>
+            </div>
+            <div class="form-group">
+                <label for="impact_service">Impact Service:</label>
+                <input type="text" id="impact_service" name="impact_service" required>
+            </div>
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <textarea id="description" name="description" required></textarea>
+            </div>
+            <div class="form-group">
+                <label for="status">Status:</label>
+                <select id="status" name="status" required>
+                    <option value="Open">Open</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Resolved">Resolved</option>
+                    <option value="Closed">Closed</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="open_by">Open By:</label>
+                <input type="text" id="open_by" name="open_by" required>
+            </div>
+            <div class="form-group">
+                <label for="open_date">Open Date:</label>
+                <input type="date" id="open_date" name="open_date" required>
+            </div>
+            <div class="form-group">
+                <label for="close_date">Close Date:</label>
+                <input type="date" id="close_date" name="close_date">
+            </div>
+            <div class="form-group">
+                <label for="time_spent">Time Spent:</label>
+                <input type="text" id="time_spent" name="time_spent">
+            </div>
+            <div class="form-group">
+                <label for="assign_group">Assign Group:</label>
+                <input type="text" id="assign_group" name="assign_group" required>
+            </div>            
+            <div class="form-group">
+                <label for="assign_to">Assign To:</label>                
+                <select id="assign_to" name="assign_to" required>
+                    <!-- Options will be populated dynamically via JavaScript -->
+                    {% for user in user_login_name %}
+                        <option value="{{ user[2] }}">{{ user[2] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="root_cause">Root Cause:</label>
+                <textarea id="root_cause" name="root_cause"></textarea>
+            </div>
+            <button type="submit" class="submit-btn">Update Incident</button>
+        </form>
+    </div>
+</div>
+
+<style>
+        /* Modal Styles for draggable functionality */
+        .modal-header {
+            cursor: move;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+
+        .modal {
+            position: fixed;
+        }
+
+        .modal-content {
+            position: relative;
+            margin: 0;
+            transform: translate(-50%, -50%);
+            left: 50%;
+            top: 50%;
+        }
+
+        .close {
+            cursor: pointer;
+            font-size: 24px;
+            padding: 0 5px;
+        }
+
+        .close:hover {
+            color: #666;
+        }
+    </style>
+
+<script>
+// Make modal draggable
+function makeDraggable(modal) {
+    const modalContent = modal.querySelector('.modal-content');
+    const modalHeader = modal.querySelector('.modal-header');
+    let isDragging = false;
+    let currentX;
+    let currentY;
+    let initialX;
+    let initialY;
+    let xOffset = 0;
+    let yOffset = 0;
+
+    modalHeader.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', dragEnd);
+
+    function dragStart(e) {
+        if (e.target.closest('.close')) return;
+        
+        initialX = e.clientX - xOffset;
+        initialY = e.clientY - yOffset;
+
+        if (e.target === modalHeader || e.target.closest('.modal-header')) {
+            isDragging = true;
+        }
+    }
+
+    function drag(e) {
+        if (isDragging) {
+            e.preventDefault();
+            
+            currentX = e.clientX - initialX;
+            currentY = e.clientY - initialY;
+
+            xOffset = currentX;
+            yOffset = currentY;
+
+            setTranslate(currentX, currentY, modalContent);
+        }
+    }
+
+    function setTranslate(xPos, yPos, el) {
+        const translate = `translate(calc(-50% + ${xPos}px), calc(-50% + ${yPos}px))`;
+        el.style.transform = translate;
+    }
+
+    function dragEnd() {
+        initialX = currentX;
+        initialY = currentY;
+        isDragging = false;
+    }
+}
+
+// Initialize draggable functionality for the modal
+document.addEventListener('DOMContentLoaded', function() {
+    const editModal = document.getElementById('editModal');
+    makeDraggable(editModal);
+});
+
+function editIncident(ticketId) {
+    const modal = document.getElementById('editModal');
+    document.getElementById('ticketId').value = ticketId;
+      // Fetch current incident details
+    fetch(`/get_incident/${ticketId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+            
+            const incident = data.incident;
+            const userLoginNames = data.user_login_name;
+
+            // Map data to form fields
+            document.getElementById('ticketId').value = incident.ID;
+            document.getElementById('incident_ticket_id').value = incident.Incident_Ticket_ID || '';
+            document.getElementById('impact_service').value = incident.Impact_Service || '';
+            document.getElementById('description').value = incident.Description || '';
+            document.getElementById('status').value = incident.Status || 'Open';
+            document.getElementById('open_by').value = incident.Open_By || '';
+            document.getElementById('assign_group').value = incident.Assign_Group || '';
+            
+            // Set up the Assign To dropdown
+            const assignToSelect = document.getElementById('assign_to');
+            // Clear existing options
+            assignToSelect.innerHTML = '';
+            // Add options from the user list
+            userLoginNames.forEach(user => {
+                const option = document.createElement('option');
+                option.value = user[2]; // ID
+                option.textContent = user[2]; // Full_Name
+                if (user[2] === incident.Assign_to) {
+                    option.selected = true;
+                }
+                assignToSelect.appendChild(option);
+            });
+
+            document.getElementById('root_cause').value = incident.Root_Cause || '';
+            document.getElementById('time_spent').value = incident.Time_Spent || '';
+            // Handle dates
+            if (incident.Open_Date) {
+                const openDate = new Date(incident.Open_Date);
+                document.getElementById('open_date').value = openDate.toISOString().split('T')[0];
+            }
+            if (incident.Close_Date) {
+                const closeDate = new Date(incident.Close_Date);
+                document.getElementById('close_date').value = closeDate.toISOString().split('T')[0];
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error fetching incident details');
+        });
+    
+    modal.style.display = "block";
+}
+
+// Close modal when clicking the X
+document.querySelector('.close').onclick = function() {
+    document.getElementById('editModal').style.display = "none";
+}
+
+// Close modal when clicking outside
+window.onclick = function(event) {
+    const modal = document.getElementById('editModal');
+    if (event.target == modal) {
+        modal.style.display = "none";
+    }
+}
+
+function clearFilters() {
+    // Clear all filter inputs
+    document.getElementById('filter_ticket_id').value = '';
+    document.getElementById('filter_status').value = '';
+    document.getElementById('filter_date_from').value = '';
+    document.getElementById('filter_date_to').value = '';
+    
+    // Submit the form with cleared values
+    const form = document.getElementById('filterForm');
+    form.submit();
+}
+
+// Add form submission handling
+document.getElementById('filterForm').addEventListener('submit', function(e) {
+    // Validate date range if both dates are provided
+    const dateFrom = document.getElementById('filter_date_from').value;
+    const dateTo = document.getElementById('filter_date_to').value;
+    
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+        e.preventDefault();
+        alert('From date cannot be later than To date');
+        return false;
+    }
+});
+
+function createTask(incidentId) {
+    // Get the current datetime in ISO format
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    
+    // Create task data
+    const taskData = {
+        task_type: 'ASR',
+        task_sub_type: 'Incident ticket follow up',
+        description: 'Follow up incident ticket',
+        task_create_date: now,
+        ticket_id: incidentId
+    };
+
+    // Send POST request to create task
+    fetch('/create_task_for_incident', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(taskData)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            alert('Task created successfully!');
+        } else {
+            alert('Error creating task: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error creating task');
+    });
+}
+// Handle automatic filter update when changing status
+document.getElementById('filter_status').addEventListener('change', function() {
+    document.getElementById('filterForm').submit();
+});
+</script>
+{% endblock %}

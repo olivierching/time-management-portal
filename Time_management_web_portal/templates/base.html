@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Time Management Portal{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% if 'username' in session %}
+    <nav class="nav-bar">        
+        <div class="nav-left">
+            <a href="{{ url_for('dashboard') }}" class="nav-item">Dashboard</a>              
+            <a href="{{ url_for('incidents') }}" class="nav-item">Incident</a>
+            <a href="{{ url_for('changes') }}" class="nav-item">Change</a>            
+            <a href="{{ url_for('tasks') }}" class="nav-item">Task</a>
+            <a href="{{ url_for('change_password') }}" class="nav-item">Change Password</a>
+            {% if session['account_type'] == 'Administrator' %}
+            <a href="{{ url_for('users') }}" class="nav-item">User Management</a>
+            <a href="#" class="nav-item">Access Mapping</a>
+            <a href="#" class="nav-item">Access Type</a>
+            <a href="#" class="nav-item">Alias</a>
+            <a href="#" class="nav-item">Object</a>
+            <a href="#" class="nav-item">Object Type</a>
+            {% endif %}
+        </div>
+        <div class="nav-right">
+            <a href="{{ url_for('logout') }}" class="nav-item">Logout</a>
+        </div>
+    </nav>
+    {% endif %}
+    
+    <div class="content">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
